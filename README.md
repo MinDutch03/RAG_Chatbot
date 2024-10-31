@@ -24,8 +24,7 @@ A powerful, context-aware Health assistant chatbot built with LangChain and Stre
 ## 📋 Prerequisites
 
 ```bash
-python 3.12.7
-pip
+python 3.10
 ```
 
 ## 🚀 Installation
