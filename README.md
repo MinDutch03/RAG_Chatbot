@@ -1,10 +1,10 @@
 # RAG-based Health Assistant Chatbot 🤖⚖️
 
-A powerful, context-aware Health assistant chatbot built with LangChain and Streamlit. This application uses Retrieval Augmented Generation (RAG) to provide accurate legal information based on your documents while maintaining conversation history.
+A powerful, context-aware Health assistant chatbot built with LangChain and Streamlit. This application uses Retrieval Augmented Generation (RAG) to provide accurate health information based on your documents while maintaining conversation history.
 
 ## 🌟 Features
 
-- **PDF Document Processing**: Automatically processes and indexes legal PDF documents
+- **PDF Document Processing**: Automatically processes and indexes health PDF documents
 - **Intelligent Retrieval**: Uses semantic search to find relevant information from your health documents
 - **Conversation History Awareness**: Maintains context across multiple questions
 - **Vector Database Storage**: Efficiently stores and retrieves document embeddings using Chroma DB
@@ -59,7 +59,7 @@ pip install -r requirements.txt
 
 ## 💫 Usage
 
-1. Place your legal PDF documents in the `data/` directory
+1. Place your health PDF documents in the `data/` directory
 
 2. Run the application:
 ```bash
@@ -83,7 +83,7 @@ streamlit run app.py
 
 3. **Response Generation**:
    - Provides clear, concise answers (maximum 4 sentences)
-   - Includes legal disclaimer with every response
+   - Includes health disclaimer with every response
    - Maintains conversation history for context
 
 ## ⚠️ Important Notes
