@@ -1,4 +1,4 @@
-# RAG-based Health Chatbot Assistant 🤖⚖️
+# RAG-based Health Chatbot Assistant 🤖⚖️ (https://ragchatbot3.streamlit.app/)
 
 A powerful, context-aware Health assistant chatbot built with LangChain and Streamlit. This application uses Retrieval Augmented Generation (RAG) to provide accurate health information based on your documents while maintaining conversation history.
 
@@ -30,17 +30,20 @@ python 3.10
 ## 🚀 Installation
 
 1. Clone the repository:
+
 ```bash
 git clone https://github.com/MinDutch03/RAG_Chatbot.git
 cd RAG-based-Health-Assistant
 ```
 
 2. Install required packages:
+
 ```bash
 pip install -r requirements.txt
 ```
 
 3. Set up your environment variables:
+
 ```bash
 # Edit .env file with your configuration (Groq API key, Cohere API Key)
 ```
@@ -59,8 +62,8 @@ pip install -r requirements.txt
 ## 💫 Usage
 
 1. Place your health PDF documents in the `data/` directory
-
 2. Run the application:
+
 ```bash
 python data-ingestion.py
 streamlit run app.py
@@ -71,16 +74,17 @@ streamlit run app.py
 ## ⚙️ How It Works
 
 1. **Document Processing**:
+
    - Loads PDF documents from the data directory
    - Splits documents into manageable chunks
    - Creates embeddings using HuggingFace's model
-
 2. **Query Processing**:
+
    - Reformulates user queries to maintain context based on chat history
    - Retrieves relevant document chunks
    - Generates concise, accurate responses
-
 3. **Response Generation**:
+
    - Provides clear, concise answers (maximum 4 sentences)
    - Includes health disclaimer with every response
    - Maintains conversation history for context
