@@ -106,7 +106,7 @@ history_aware_retriever = create_history_aware_retriever(
 
 ## setting-up the document chain
 system_prompt_template = (
-    "As a Legal Assistant Chatbot specializing in legal queries, "
+    "As a Health Assistant Chatbot specializing in legal queries, "
     "your primary objective is to provide accurate and concise information based on user queries. "
     "You will adhere strictly to the instructions provided, offering relevant "
     "context from the knowledge base while avoiding unnecessary details. "
