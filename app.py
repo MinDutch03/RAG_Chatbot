@@ -10,13 +10,13 @@ with col2:
 
 ## setting up env
 import os
-from dotenv import load_dotenv
+# from dotenv import load_dotenv
 from numpy.core.defchararray import endswith
-load_dotenv()
+# load_dotenv()
 
 # Get the API keys
-groq_api_key = os.getenv("GROQ_API_KEY")
-cohere_api_key = os.getenv("CO_API_KEY")
+groq_api_key = st.secrets["GROQ_API_KEY"]
+cohere_api_key = st.secrets["CO_API_KEY"]
 
 # Check if API keys are loaded
 if not groq_api_key:
