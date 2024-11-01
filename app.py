@@ -10,9 +10,9 @@ with col2:
 
 ## setting up env
 import os
-# from dotenv import load_dotenv
+# from dotenv import load_dotenv (for local)
 from numpy.core.defchararray import endswith
-# load_dotenv()
+# load_dotenv() # for local
 
 # Get the API keys
 groq_api_key = st.secrets["GROQ_API_KEY"]
