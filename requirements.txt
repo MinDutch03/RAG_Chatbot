@@ -21,7 +21,7 @@ cachetools==5.5.0
 certifi==2024.8.30
 charset-normalizer==3.4.0
 chroma-hnswlib==0.7.6
-chromadb
+chromadb==0.5.13
 click==8.1.7
 cloudpickle==2.2.1
 cohere==5.11.0
@@ -224,3 +224,4 @@ widgetsnbextension==4.0.13
 wrapt==1.16.0
 yarl==1.15.1
 zipp==3.20.2
+pysqlite3-binary
