@@ -9,7 +9,7 @@ sys.modules['sqlite3'] = sys.modules.pop('pysqlite3')
 st.set_page_config(page_title="RAG-Based Health Assistant")
 col1, col2, col3 = st.columns([1, 25, 1])
 with col2:
-    st.title("RAG-Based Health Assistant", page_icon="🤖")
+    st.title("RAG-Based Health Assistant 🤖")
 
 ## setting up env
 import os
