@@ -1,5 +1,4 @@
-# RAG-based Health Chatbot Assistant 🤖 <img src="assets/user-md-solid.svg" width="30" height="30">
-[Link](https://ragchatbot3.streamlit.app/)
+# RAG-based Health Chatbot Assistant 🤖🏥 [Link](https://ragchatbot3.streamlit.app/)
 
 A powerful, context-aware Health assistant chatbot built with LangChain and Streamlit. This application uses Retrieval Augmented Generation (RAG) to provide accurate health information based on your documents while maintaining conversation history.
 
