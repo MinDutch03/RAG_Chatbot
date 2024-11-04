@@ -155,8 +155,8 @@ if user_query:
 
             full_response = (
                 "⚠️ **_This information is not intended as a substitute for health advice. "
-                "We recommend consulting with an doctor for a more comprehensive and"
-                " tailored response._** \n\n\n"
+                "_Please consult a healthcare professional for personalized recommendations._"
+                "** \n\n\n"
             )
 
         ## displaying the output on the dashboard
