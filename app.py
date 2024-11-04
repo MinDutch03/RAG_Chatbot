@@ -154,9 +154,8 @@ if user_query:
             message_placeholder = st.empty()
 
             full_response = (
-                "⚠️ **_This information is not intended as a substitute for health advice. "
-                "_Please consult a healthcare professional for personalized recommendations._"
-                "** \n\n\n"
+                "⚠️ **_This information is not intended as a substitute for health advice. \n"
+                "_Please consult a healthcare professional for personalized recommendations._** \n\n\n"
             )
 
         ## displaying the output on the dashboard
