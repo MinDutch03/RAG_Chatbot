@@ -1,8 +1,22 @@
 import time
 import streamlit as st
-__import__('pysqlite3')
-import sys
-sys.modules['sqlite3'] = sys.modules.pop('pysqlite3')
+import json
+import os
+
+# Load or save chat sessions to/from a JSON file
+CHATS_FILE = "chats.json"
+
+# Function to load chat sessions from the file
+def load_chats():
+    if os.path.exists(CHATS_FILE):
+        with open(CHATS_FILE, "r") as file:
+            return json.load(file)
+    return {}
+
+# Function to save chat sessions to the file
+def save_chats():
+    with open(CHATS_FILE, "w") as file:
+        json.dump(st.session_state["chats"], file)
 
 # Initializing the UI
 st.set_page_config(page_title="RAG-Based Health Assistant", page_icon="🚑")
@@ -12,7 +26,6 @@ with col2:
     st.write("Your AI-powered Assistant")
 
 # Setting up env
-import os
 from numpy.core.defchararray import endswith
 
 # Get the API keys
@@ -45,9 +58,9 @@ persistent_directory = os.path.join(current_dir, "data-ingestion-local")
 chatmodel = ChatGroq(model="llama-3.1-8b-instant", temperature=0.15, api_key=groq_api_key)
 llm = ChatCohere(temperature=0.15, api_key=cohere_api_key)
 
-# Setting up -> Streamlit session state
+# Load chats from file at app startup
 if "chats" not in st.session_state:
-    st.session_state["chats"] = {}
+    st.session_state["chats"] = load_chats()
 
 if "current_chat" not in st.session_state:
     st.session_state["current_chat"] = None
@@ -60,17 +73,20 @@ def start_new_chat():
         "id": new_chat_id
     }
     st.session_state["current_chat"] = new_chat_id
+    save_chats()  # Save after creating a new chat
     return new_chat_id
 
 # Function to reset current chat
 def reset_current_chat():
     if st.session_state["current_chat"] is not None:
         st.session_state["chats"][st.session_state["current_chat"]]["messages"] = []
+        save_chats()  # Save after resetting the chat
 
 # Function to delete a chat session
 def delete_chat_session(chat_id):
     if chat_id in st.session_state["chats"]:
         del st.session_state["chats"][chat_id]
+        save_chats()  # Save after deleting a chat
         # Reset current chat to None if the deleted session is the current one
         if st.session_state["current_chat"] == chat_id:
             st.session_state["current_chat"] = None
@@ -222,18 +238,15 @@ if user_query:
         # Displaying the output on the dashboard
         for chunk in result["answer"]:
             full_response += chunk
-            time.sleep(0.02)  # Simulate the output feeling of ChatGPT
+            time.sleep(0.02)  # Adding a delay for a typing effect
 
-            message_placeholder.markdown(full_response + " ▌")
+        message_placeholder.markdown(full_response)
 
-    # Appending conversation turns to the current chat
-    current_chat_messages.extend(
-        [
-            HumanMessage(content=user_query),
-            AIMessage(content=result['answer'])
-        ]
-    )
-
-# Add Reset Current Chat button
-if st.button('Reset Current Chat 🗑️'):
-    reset_current_chat()
+        # Append conversation turns to the current chat
+        current_chat_messages.extend(
+            [
+                HumanMessage(content=user_query),
+                AIMessage(content=result['answer'])
+            ]
+        )
+        save_chats()  # Save after adding a new message
