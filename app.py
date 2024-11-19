@@ -164,7 +164,6 @@ if user_query:
             time.sleep(0.02) ## <- simulate the output feeling of ChatGPT
 
             message_placeholder.markdown(full_response + " ▌")
-        st.button('Reset Conversation 🗑️', on_click=reset_conversation)
     ## appending conversation turns
     st.session_state.messages.extend(
         [
@@ -172,3 +171,4 @@ if user_query:
             AIMessage(content=result['answer'])
         ]
     )
+st.button('Reset Conversation 🗑️', on_click=reset_conversation)
