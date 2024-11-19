@@ -14,9 +14,7 @@ with col2:
 
 ## setting up env
 import os
-# from dotenv import load_dotenv (for local)
 from numpy.core.defchararray import endswith
-# load_dotenv() # for local
 
 # Get the API keys
 groq_api_key = st.secrets["GROQ_API_KEY"]
@@ -35,7 +33,6 @@ from langchain_groq import ChatGroq
 from langchain_chroma import Chroma
 from langchain.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_cohere.chat_models import ChatCohere
-## implementation of LangChain ConversationalRetrievalChain
 from langchain.chains import create_history_aware_retriever, create_retrieval_chain
 from langchain.chains.combine_documents import create_stuff_documents_chain
 
@@ -48,16 +45,34 @@ persistent_directory = os.path.join(current_dir, "data-ingestion-local")
 chatmodel = ChatGroq(model="llama-3.1-8b-instant", temperature=0.15, api_key=groq_api_key)
 llm = ChatCohere(temperature=0.15, api_key=cohere_api_key)
 
-
 ## setting up -> streamlit session state
+if "chat_histories" not in st.session_state:
+    st.session_state["chat_histories"] = {}  # Dictionary to store all chat histories
+if "current_chat_id" not in st.session_state:
+    st.session_state["current_chat_id"] = 1
+    st.session_state["chat_histories"][1] = []  # Initialize first chat
 if "messages" not in st.session_state:
-    st.session_state["messages"] = []
+    st.session_state["messages"] = st.session_state["chat_histories"][1]
 
-# resetting the entire conversation
+# Function to reset the current conversation
 def reset_conversation():
-    st.session_state['messages'] = []
+    st.session_state["chat_histories"][st.session_state["current_chat_id"]] = []
+    st.session_state["messages"] = st.session_state["chat_histories"][st.session_state["current_chat_id"]]
 
-## open-source embedding model from HuggingFace - taking the default model only
+# Function to start a new conversation
+def new_conversation():
+    new_chat_id = st.session_state["current_chat_id"] + 1
+    st.session_state["current_chat_id"] = new_chat_id
+    if new_chat_id not in st.session_state["chat_histories"]:
+        st.session_state["chat_histories"][new_chat_id] = []
+    st.session_state["messages"] = st.session_state["chat_histories"][new_chat_id]
+
+# Function to switch to a specific conversation
+def switch_conversation(chat_id):
+    st.session_state["current_chat_id"] = chat_id
+    st.session_state["messages"] = st.session_state["chat_histories"][chat_id]
+
+## open-source embedding model from HuggingFace
 embedF = HuggingFaceEmbeddings(model_name = "all-MiniLM-L6-v2")
 
 ## loading the vector database from local
@@ -104,7 +119,6 @@ history_aware_retriever = create_history_aware_retriever(
     prompt = rephrasing_prompt
 )
 
-
 ## setting-up the document chain
 system_prompt_template = (
     "As a Health Assistant Chatbot specializing in health queries, "
@@ -135,7 +149,27 @@ coversational_rag_chain = create_retrieval_chain(history_aware_retriever, qa_cha
 
 ## setting-up conversational UI
 
-## printing all (if any) messages in the session_session `message` key
+# Sidebar layout
+st.sidebar.title("Chat Sessions")
+
+# Display current chat ID and controls
+st.sidebar.write(f"Current Chat #{st.session_state['current_chat_id']}")
+
+# Add control buttons
+col1, col2 = st.sidebar.columns(2)
+with col1:
+    st.button('Reset 🗑️', on_click=reset_conversation)
+with col2:
+    st.button('New Chat ➕', on_click=new_conversation)
+
+# Display all available chat sessions
+st.sidebar.markdown("### Previous Chats")
+for chat_id in sorted(st.session_state["chat_histories"].keys(), reverse=True):
+    if chat_id != st.session_state["current_chat_id"]:
+        if st.sidebar.button(f"Chat #{chat_id}", key=f"switch_{chat_id}"):
+            switch_conversation(chat_id)
+
+# Main chat interface
 for message in st.session_state.messages:
     with st.chat_message(message.type):
         st.write(message.content)
@@ -161,14 +195,13 @@ if user_query:
         ## displaying the output on the dashboard
         for chunk in result["answer"]:
             full_response += chunk
-            time.sleep(0.02) ## <- simulate the output feeling of ChatGPT
-
+            time.sleep(0.02)
             message_placeholder.markdown(full_response + " ▌")
-        st.button('Reset Conversation 🗑️', on_click=reset_conversation)
-    ## appending conversation turns
-    st.session_state.messages.extend(
-        [
-            HumanMessage(content=user_query),
-            AIMessage(content=result['answer'])
-        ]
-    )
+
+    ## appending conversation turns to both current messages and chat histories
+    new_messages = [
+        HumanMessage(content=user_query),
+        AIMessage(content=result['answer'])
+    ]
+    st.session_state.messages.extend(new_messages)
+    st.session_state.chat_histories[st.session_state.current_chat_id].extend(new_messages)
