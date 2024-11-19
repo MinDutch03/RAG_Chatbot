@@ -7,10 +7,37 @@ sys.modules['sqlite3'] = sys.modules.pop('pysqlite3')
 
 ## initializing the UI
 st.set_page_config(page_title="RAG-Based Health Assistant", page_icon="🚑")
+
+## Initialize session state variables
+if "messages" not in st.session_state:
+    st.session_state["messages"] = []
+if "chat_sessions" not in st.session_state:
+    st.session_state["chat_sessions"] = [{"id": 0, "messages": []}]
+if "current_chat_id" not in st.session_state:
+    st.session_state["current_chat_id"] = 0
+
+## UI Layout
 col1, col2, col3 = st.columns([1, 25, 1])
 with col2:
     st.title("RAG-Based Health Assistant 👨‍⚕️")
     st.write("Your AI-powered Assistant")
+
+# Sidebar for chat management
+with st.sidebar:
+    st.title("Chat Sessions")
+
+    # New Chat button
+    if st.button("New Chat 📝"):
+        new_chat_id = len(st.session_state["chat_sessions"])
+        st.session_state["chat_sessions"].append({"id": new_chat_id, "messages": []})
+        st.session_state["current_chat_id"] = new_chat_id
+        st.rerun()
+
+    # Display chat sessions
+    for session in st.session_state["chat_sessions"]:
+        if st.button(f"Chat {session['id']}", key=f"chat_{session['id']}"):
+            st.session_state["current_chat_id"] = session['id']
+            st.rerun()
 
 ## setting up env
 import os
@@ -35,7 +62,6 @@ from langchain_groq import ChatGroq
 from langchain_chroma import Chroma
 from langchain.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_cohere.chat_models import ChatCohere
-## implementation of LangChain ConversationalRetrievalChain
 from langchain.chains import create_history_aware_retriever, create_retrieval_chain
 from langchain.chains.combine_documents import create_stuff_documents_chain
 
@@ -48,14 +74,10 @@ persistent_directory = os.path.join(current_dir, "data-ingestion-local")
 chatmodel = ChatGroq(model="llama-3.1-8b-instant", temperature=0.15, api_key=groq_api_key)
 llm = ChatCohere(temperature=0.15, api_key=cohere_api_key)
 
-
-## setting up -> streamlit session state
-if "messages" not in st.session_state:
-    st.session_state["messages"] = []
-
 # resetting the entire conversation
 def reset_conversation():
-    st.session_state['messages'] = []
+    st.session_state['chat_sessions'] = [{"id": 0, "messages": []}]
+    st.session_state['current_chat_id'] = 0
 
 ## open-source embedding model from HuggingFace - taking the default model only
 embedF = HuggingFaceEmbeddings(model_name = "all-MiniLM-L6-v2")
@@ -67,28 +89,26 @@ vectorDB = Chroma(embedding_function=embedF, persist_directory=persistent_direct
 kb_retriever = vectorDB.as_retriever(search_type="mmr",search_kwargs={"k": 3})
 
 ## initiating the history_aware_retriever
-rephrasing_template = (
-    """
-        TASK: Convert context-dependent questions into standalone queries.
+rephrasing_template = """
+    TASK: Convert context-dependent questions into standalone queries.
 
-        INPUT:
-        - chat_history: Previous messages
-        - question: Current user query
+    INPUT:
+    - chat_history: Previous messages
+    - question: Current user query
 
-        RULES:
-        1. Replace pronouns (it/they/this) with specific referents
-        2. Expand contextual phrases ("the above", "previous")
-        3. Return original if already standalone
-        4. NEVER answer or explain - only reformulate
+    RULES:
+    1. Replace pronouns (it/they/this) with specific referents
+    2. Expand contextual phrases ("the above", "previous")
+    3. Return original if already standalone
+    4. NEVER answer or explain - only reformulate
 
-        OUTPUT: Single reformulated question, preserving original intent and style.
+    OUTPUT: Single reformulated question, preserving original intent and style.
 
-        Example:
-        History: "Let's discuss Python."
-        Question: "How do I use it?"
-        Returns: "How do I use Python?"
-    """
-)
+    Example:
+    History: "Let's discuss Python."
+    Question: "How do I use it?"
+    Returns: "How do I use Python?"
+"""
 
 rephrasing_prompt = ChatPromptTemplate.from_messages(
     [
@@ -103,7 +123,6 @@ history_aware_retriever = create_history_aware_retriever(
     retriever = kb_retriever,
     prompt = rephrasing_prompt
 )
-
 
 ## setting-up the document chain
 system_prompt_template = (
@@ -133,10 +152,15 @@ qa_chain = create_stuff_documents_chain(chatmodel, qa_prompt)
 ## final RAG chain
 coversational_rag_chain = create_retrieval_chain(history_aware_retriever, qa_chain)
 
-## setting-up conversational UI
+## Get current chat session's messages
+current_chat = next(
+    (chat for chat in st.session_state["chat_sessions"]
+     if chat["id"] == st.session_state["current_chat_id"]),
+    {"messages": []}
+)
 
-## printing all (if any) messages in the session_session `message` key
-for message in st.session_state.messages:
+## printing all messages in the current chat session
+for message in current_chat["messages"]:
     with st.chat_message(message.type):
         st.write(message.content)
 
@@ -149,7 +173,10 @@ if user_query:
     with st.chat_message("assistant"):
         with st.status("Generating 💡...", expanded=True):
             ## invoking the chain to fetch the result
-            result = coversational_rag_chain.invoke({"input": user_query, "chat_history": st.session_state['messages']})
+            result = coversational_rag_chain.invoke({
+                "input": user_query,
+                "chat_history": current_chat["messages"]
+            })
 
             message_placeholder = st.empty()
 
@@ -161,14 +188,19 @@ if user_query:
         ## displaying the output on the dashboard
         for chunk in result["answer"]:
             full_response += chunk
-            time.sleep(0.02) ## <- simulate the output feeling of ChatGPT
-
+            time.sleep(0.02)
             message_placeholder.markdown(full_response + " ▌")
-    ## appending conversation turns
-    st.session_state.messages.extend(
-        [
-            HumanMessage(content=user_query),
-            AIMessage(content=result['answer'])
-        ]
-    )
-st.button('Reset Conversation 🗑️', on_click=reset_conversation)
+
+    ## Update the current chat session's messages
+    new_messages = [
+        HumanMessage(content=user_query),
+        AIMessage(content=result['answer'])
+    ]
+
+    for chat in st.session_state["chat_sessions"]:
+        if chat["id"] == st.session_state["current_chat_id"]:
+            chat["messages"].extend(new_messages)
+            break
+
+# Reset button at the bottom
+st.button('Reset All Conversations 🗑️', on_click=reset_conversation)
