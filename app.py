@@ -71,9 +71,15 @@ def reset_current_chat():
 def delete_chat_session(chat_id):
     if chat_id in st.session_state["chats"]:
         del st.session_state["chats"][chat_id]
+        # Reset current chat to None if the deleted session is the current one
         if st.session_state["current_chat"] == chat_id:
-            st.session_state["current_chat"] = None  # Reset current chat
+            st.session_state["current_chat"] = None
         st.success(f"Chat session {chat_id} deleted successfully.")
+        # Refresh the selected chat dropdown by resetting the current chat
+        if len(st.session_state["chats"]) > 0:
+            st.session_state["current_chat"] = list(st.session_state["chats"].keys())[0]
+        else:
+            st.session_state["current_chat"] = None
 
 # Open-source embedding model from HuggingFace - using the default model
 embedF = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
