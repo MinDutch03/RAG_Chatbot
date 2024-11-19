@@ -4,6 +4,7 @@ import streamlit_cookies_manager as cookie_manager
 import json
 import os
 
+st.set_page_config(page_title="RAG-Based Health Assistant", page_icon="🚑")
 # Initialize cookie manager
 cookies = cookie_manager.CookieManager()
 
@@ -12,7 +13,6 @@ if not cookies.ready():
     st.stop()
 
 # Initializing the UI
-st.set_page_config(page_title="RAG-Based Health Assistant", page_icon="🚑")
 col1, col2, col3 = st.columns([1, 25, 1])
 with col2:
     st.title("RAG-Based Health Assistant 👨‍⚕️")
