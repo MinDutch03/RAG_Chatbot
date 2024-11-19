@@ -93,7 +93,7 @@ if user_query:
         with st.status("Generating 💡...", expanded=True):
             # Example assistant response
             response = f"Here's a response to: {user_query}"
-            time.sleep(1)
+            time.sleep(0.02)
 
         st.write(response)
         current_chat_messages.append({"type": "user", "content": user_query})
