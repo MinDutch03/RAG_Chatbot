@@ -3,47 +3,19 @@ import time
 import streamlit as st
 __import__('pysqlite3')
 import sys
+import uuid
 sys.modules['sqlite3'] = sys.modules.pop('pysqlite3')
 
 ## initializing the UI
 st.set_page_config(page_title="RAG-Based Health Assistant", page_icon="🚑")
-
-## Initialize session state variables
-if "messages" not in st.session_state:
-    st.session_state["messages"] = []
-if "chat_sessions" not in st.session_state:
-    st.session_state["chat_sessions"] = [{"id": 0, "messages": []}]
-if "current_chat_id" not in st.session_state:
-    st.session_state["current_chat_id"] = 0
-
-## UI Layout
 col1, col2, col3 = st.columns([1, 25, 1])
 with col2:
     st.title("RAG-Based Health Assistant 👨‍⚕️")
     st.write("Your AI-powered Assistant")
 
-# Sidebar for chat management
-with st.sidebar:
-    st.title("Chat Sessions")
-
-    # New Chat button
-    if st.button("New Chat 📝"):
-        new_chat_id = len(st.session_state["chat_sessions"])
-        st.session_state["chat_sessions"].append({"id": new_chat_id, "messages": []})
-        st.session_state["current_chat_id"] = new_chat_id
-        st.rerun()
-
-    # Display chat sessions
-    for session in st.session_state["chat_sessions"]:
-        if st.button(f"Chat {session['id']}", key=f"chat_{session['id']}"):
-            st.session_state["current_chat_id"] = session['id']
-            st.rerun()
-
 ## setting up env
 import os
-# from dotenv import load_dotenv (for local)
 from numpy.core.defchararray import endswith
-# load_dotenv() # for local
 
 # Get the API keys
 groq_api_key = st.secrets["GROQ_API_KEY"]
@@ -74,12 +46,30 @@ persistent_directory = os.path.join(current_dir, "data-ingestion-local")
 chatmodel = ChatGroq(model="llama-3.1-8b-instant", temperature=0.15, api_key=groq_api_key)
 llm = ChatCohere(temperature=0.15, api_key=cohere_api_key)
 
-# resetting the entire conversation
-def reset_conversation():
-    st.session_state['chat_sessions'] = [{"id": 0, "messages": []}]
-    st.session_state['current_chat_id'] = 0
+## setting up -> streamlit session state
+if "chat_sessions" not in st.session_state:
+    st.session_state["chat_sessions"] = {}
+if "current_chat_id" not in st.session_state:
+    st.session_state["current_chat_id"] = str(uuid.uuid4())
+if "messages" not in st.session_state:
+    st.session_state["messages"] = []
 
-## open-source embedding model from HuggingFace - taking the default model only
+# Function to create a new chat
+def new_chat():
+    new_chat_id = str(uuid.uuid4())
+    # Save current messages to chat_sessions
+    st.session_state["chat_sessions"][st.session_state["current_chat_id"]] = st.session_state["messages"].copy()
+    # Create new chat
+    st.session_state["current_chat_id"] = new_chat_id
+    st.session_state["messages"] = []
+
+# Function to reset the entire conversation
+def reset_conversation():
+    st.session_state['messages'] = []
+    st.session_state['chat_sessions'] = {}
+    st.session_state["current_chat_id"] = str(uuid.uuid4())
+
+## open-source embedding model from HuggingFace
 embedF = HuggingFaceEmbeddings(model_name = "all-MiniLM-L6-v2")
 
 ## loading the vector database from local
@@ -152,15 +142,15 @@ qa_chain = create_stuff_documents_chain(chatmodel, qa_prompt)
 ## final RAG chain
 coversational_rag_chain = create_retrieval_chain(history_aware_retriever, qa_chain)
 
-## Get current chat session's messages
-current_chat = next(
-    (chat for chat in st.session_state["chat_sessions"]
-     if chat["id"] == st.session_state["current_chat_id"]),
-    {"messages": []}
-)
+## Add buttons in a horizontal layout
+col1, col2 = st.columns(2)
+with col1:
+    st.button('New Chat 📝', on_click=new_chat)
+with col2:
+    st.button('Reset All Chats 🗑️', on_click=reset_conversation)
 
-## printing all messages in the current chat session
-for message in current_chat["messages"]:
+## printing all (if any) messages in the session_session `message` key
+for message in st.session_state.messages:
     with st.chat_message(message.type):
         st.write(message.content)
 
@@ -173,10 +163,7 @@ if user_query:
     with st.chat_message("assistant"):
         with st.status("Generating 💡...", expanded=True):
             ## invoking the chain to fetch the result
-            result = coversational_rag_chain.invoke({
-                "input": user_query,
-                "chat_history": current_chat["messages"]
-            })
+            result = coversational_rag_chain.invoke({"input": user_query, "chat_history": st.session_state['messages']})
 
             message_placeholder = st.empty()
 
@@ -189,18 +176,12 @@ if user_query:
         for chunk in result["answer"]:
             full_response += chunk
             time.sleep(0.02)
+
             message_placeholder.markdown(full_response + " ▌")
-
-    ## Update the current chat session's messages
-    new_messages = [
-        HumanMessage(content=user_query),
-        AIMessage(content=result['answer'])
-    ]
-
-    for chat in st.session_state["chat_sessions"]:
-        if chat["id"] == st.session_state["current_chat_id"]:
-            chat["messages"].extend(new_messages)
-            break
-
-# Reset button at the bottom
-st.button('Reset All Conversations 🗑️', on_click=reset_conversation)
+    ## appending conversation turns
+    st.session_state.messages.extend(
+        [
+            HumanMessage(content=user_query),
+            AIMessage(content=result['answer'])
+        ]
+    )
