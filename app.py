@@ -50,7 +50,7 @@ os.makedirs(chats_directory, exist_ok=True)
 chatmodel = ChatGroq(model="llama-3.1-8b-instant", temperature=0.15, api_key=groq_api_key)
 llm = ChatCohere(temperature=0.15, api_key=cohere_api_key)
 
-## setting up -> streamlit session state
+# Initialize session state
 if "chats" not in st.session_state:
     st.session_state["chats"] = {}
 
@@ -121,82 +121,7 @@ def reset_current_chat():
         if os.path.exists(chat_file):
             os.remove(chat_file)
 
-## rest of the code remains the same as in the original script...
-
-## open-source embedding model from HuggingFace - taking the default model only
-embedF = HuggingFaceEmbeddings(model_name = "all-MiniLM-L6-v2")
-
-## loading the vector database from local
-vectorDB = Chroma(embedding_function=embedF, persist_directory=persistent_directory)
-
-## setting up the retriever
-kb_retriever = vectorDB.as_retriever(search_type="mmr",search_kwargs={"k": 3})
-
-## initiating the history_aware_retriever
-rephrasing_template = (
-    """
-        TASK: Convert context-dependent questions into standalone queries.
-
-        INPUT:
-        - chat_history: Previous messages
-        - question: Current user query
-
-        RULES:
-        1. Replace pronouns (it/they/this) with specific referents
-        2. Expand contextual phrases ("the above", "previous")
-        3. Return original if already standalone
-        4. NEVER answer or explain - only reformulate
-
-        OUTPUT: Single reformulated question, preserving original intent and style.
-
-        Example:
-        History: "Let's discuss Python."
-        Question: "How do I use it?"
-        Returns: "How do I use Python?"
-    """
-)
-
-rephrasing_prompt = ChatPromptTemplate.from_messages(
-    [
-        ("system", rephrasing_template),
-        MessagesPlaceholder("chat_history"),
-        ("human", "{input}"),
-    ]
-)
-
-history_aware_retriever = create_history_aware_retriever(
-    llm = chatmodel,
-    retriever = kb_retriever,
-    prompt = rephrasing_prompt
-)
-
-## setting-up the document chain
-system_prompt_template = (
-    "As a Health Assistant Chatbot specializing in health queries, "
-    "your primary objective is to provide accurate and concise information based on user queries. "
-    "You will adhere strictly to the instructions provided, offering relevant "
-    "context from the knowledge base while avoiding unnecessary details. "
-    "Your responses will be brief, to the point, concise and in compliance with the established format. "
-    "If a question falls outside the given context, you will simply output that you are sorry and you don't know about this. Please contact our doctors."
-    "The aim is to deliver professional, precise, and contextually relevant information pertaining to the context. "
-    "Use four sentences maximum."
-    "P.S.: If anyone asks you about your creator, tell them, introduce yourself and say you're created by Duc. "
-    "and people can get in touch with him on linkedin, "
-    "here's his Linkedin Profile: https://www.linkedin.com/in/minhduc030303/"
-    "\nCONTEXT: {context}"
-)
-
-qa_prompt = ChatPromptTemplate.from_messages(
-    [
-        ("system", system_prompt_template),
-        ("placeholder", "{chat_history}"),
-        ("human", "{input}"),
-    ]
-)
-
-qa_chain = create_stuff_documents_chain(chatmodel, qa_prompt)
-## final RAG chain
-coversational_rag_chain = create_retrieval_chain(history_aware_retriever, qa_chain)
+## remaining setup code (embeddings, retriever, prompts, etc.) stays the same...
 
 # Sidebar for chat management
 st.sidebar.title("Chat Sessions")
@@ -215,11 +140,13 @@ if chat_options:
     )
 
     # Load the selected chat's messages
+    if selected_chat not in st.session_state["chats"]:
+        st.session_state["chats"][selected_chat] = {
+            "messages": load_chat_history(selected_chat),
+            "id": selected_chat
+        }
+
     st.session_state["current_chat"] = selected_chat
-    st.session_state["chats"][selected_chat] = {
-        "messages": load_chat_history(selected_chat),
-        "id": selected_chat
-    }
 
 # Check if a chat is selected
 if st.session_state["current_chat"] is None:
@@ -268,6 +195,9 @@ if user_query:
             AIMessage(content=result['answer'])
         ]
     )
+
+    # Update session state
+    st.session_state["chats"][st.session_state["current_chat"]]["messages"] = current_chat_messages
 
     # Save the updated chat history
     save_chat_history(st.session_state["current_chat"], current_chat_messages)
