@@ -132,8 +132,8 @@ system_prompt_template = (
 qa_prompt = ChatPromptTemplate.from_messages(
     [
         ("system", system_prompt_template),
-        ("placeholder", "{chat_history}"),
         ("human", "{input}"),
+        ("chat_history", "{chat_history}")
     ]
 )
 
