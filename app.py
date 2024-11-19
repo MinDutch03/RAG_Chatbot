@@ -3,6 +3,8 @@ import streamlit as st
 __import__('pysqlite3')
 import sys
 sys.modules['sqlite3'] = sys.modules.pop('pysqlite3')
+import os
+import pickle
 
 # Initializing the UI
 st.set_page_config(page_title="RAG-Based Health Assistant", page_icon="🚑")
@@ -12,7 +14,6 @@ with col2:
     st.write("Your AI-powered Assistant")
 
 # Setting up env
-import os
 from numpy.core.defchararray import endswith
 
 # Get the API keys
@@ -41,16 +42,32 @@ current_dir = os.path.dirname(os.path.abspath(__file__))
 data_path = os.path.join(current_dir, "data")
 persistent_directory = os.path.join(current_dir, "data-ingestion-local")
 
+# Session Persistence Functions
+def save_chat_sessions():
+    sessions_path = os.path.join(current_dir, 'chat_sessions.pkl')
+    with open(sessions_path, 'wb') as f:
+        pickle.dump(st.session_state["chats"], f)
+
+def load_chat_sessions():
+    sessions_path = os.path.join(current_dir, 'chat_sessions.pkl')
+    if os.path.exists(sessions_path):
+        with open(sessions_path, 'rb') as f:
+            return pickle.load(f)
+    return {}
+
 # Setting up the LLM
 chatmodel = ChatGroq(model="llama-3.1-8b-instant", temperature=0.15, api_key=groq_api_key)
 llm = ChatCohere(temperature=0.15, api_key=cohere_api_key)
 
 # Setting up -> Streamlit session state
 if "chats" not in st.session_state:
-    st.session_state["chats"] = {}
+    st.session_state["chats"] = load_chat_sessions()
 
 if "current_chat" not in st.session_state:
-    st.session_state["current_chat"] = None
+    if st.session_state["chats"]:
+        st.session_state["current_chat"] = list(st.session_state["chats"].keys())[0]
+    else:
+        st.session_state["current_chat"] = None
 
 # Function to start a new chat
 def start_new_chat():
@@ -60,17 +77,20 @@ def start_new_chat():
         "id": new_chat_id
     }
     st.session_state["current_chat"] = new_chat_id
+    save_chat_sessions()
     return new_chat_id
 
 # Function to reset current chat
 def reset_current_chat():
     if st.session_state["current_chat"] is not None:
         st.session_state["chats"][st.session_state["current_chat"]]["messages"] = []
+        save_chat_sessions()
 
 # Function to delete a chat session
 def delete_chat_session(chat_id):
     if chat_id in st.session_state["chats"]:
         del st.session_state["chats"][chat_id]
+        save_chat_sessions()
         # Reset current chat to None if the deleted session is the current one
         if st.session_state["current_chat"] == chat_id:
             st.session_state["current_chat"] = None
@@ -233,6 +253,7 @@ if user_query:
             AIMessage(content=result['answer'])
         ]
     )
+    save_chat_sessions()  # Save after adding messages
 
 # Add Reset Current Chat button
 if st.button('Reset Current Chat 🗑️'):
