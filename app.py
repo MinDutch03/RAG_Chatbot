@@ -1,41 +1,8 @@
 import time
 import streamlit as st
-import json
-import os
-
-# Load or save chat sessions to/from a JSON file
-CHATS_FILE = "chats.json"
-
-# Function to load chat sessions from the file
-def load_chats():
-    if os.path.exists(CHATS_FILE):
-        with open(CHATS_FILE, "r") as file:
-            data = json.load(file)
-            # Deserialize messages (convert back to dictionaries)
-            for chat_id, chat in data.items():
-                chat["messages"] = [
-                    {
-                        "type": message["type"],
-                        "content": message["content"]
-                    }
-                    for message in chat["messages"]
-                ]
-            return data
-    return {}
-
-# Function to save chat sessions to the file
-def save_chats():
-    # Serialize messages (convert to dictionaries)
-    for chat_id, chat in st.session_state["chats"].items():
-        chat["messages"] = [
-            {
-                "type": message.type,
-                "content": message.content
-            }
-            for message in chat["messages"]
-        ]
-    with open(CHATS_FILE, "w") as file:
-        json.dump(st.session_state["chats"], file)
+__import__('pysqlite3')
+import sys
+sys.modules['sqlite3'] = sys.modules.pop('pysqlite3')
 
 # Initializing the UI
 st.set_page_config(page_title="RAG-Based Health Assistant", page_icon="🚑")
@@ -43,6 +10,10 @@ col1, col2, col3 = st.columns([1, 25, 1])
 with col2:
     st.title("RAG-Based Health Assistant 👨‍⚕️")
     st.write("Your AI-powered Assistant")
+
+# Setting up env
+import os
+from numpy.core.defchararray import endswith
 
 # Get the API keys
 groq_api_key = st.secrets["GROQ_API_KEY"]
@@ -74,9 +45,9 @@ persistent_directory = os.path.join(current_dir, "data-ingestion-local")
 chatmodel = ChatGroq(model="llama-3.1-8b-instant", temperature=0.15, api_key=groq_api_key)
 llm = ChatCohere(temperature=0.15, api_key=cohere_api_key)
 
-# Load chats from file at app startup
+# Setting up -> Streamlit session state
 if "chats" not in st.session_state:
-    st.session_state["chats"] = load_chats()
+    st.session_state["chats"] = {}
 
 if "current_chat" not in st.session_state:
     st.session_state["current_chat"] = None
@@ -89,20 +60,17 @@ def start_new_chat():
         "id": new_chat_id
     }
     st.session_state["current_chat"] = new_chat_id
-    save_chats()  # Save after creating a new chat
     return new_chat_id
 
 # Function to reset current chat
 def reset_current_chat():
     if st.session_state["current_chat"] is not None:
         st.session_state["chats"][st.session_state["current_chat"]]["messages"] = []
-        save_chats()  # Save after resetting the chat
 
 # Function to delete a chat session
 def delete_chat_session(chat_id):
     if chat_id in st.session_state["chats"]:
         del st.session_state["chats"][chat_id]
-        save_chats()  # Save after deleting a chat
         # Reset current chat to None if the deleted session is the current one
         if st.session_state["current_chat"] == chat_id:
             st.session_state["current_chat"] = None
@@ -227,30 +195,45 @@ for chat_id, chat in st.session_state["chats"].items():
 
 # Print all messages in the current chat
 for message in current_chat_messages:
-    with st.chat_message(message["type"]):
-        st.write(message["content"])
+    with st.chat_message(message.type):
+        st.write(message.content)
 
 user_query = st.chat_input("Ask me anything ..")
 
 if user_query:
-    # Show typing animation
     with st.chat_message("user"):
         st.write(user_query)
 
-    # Get response from the LLM
-    with st.spinner("Thinking..."):
-        result = coversational_rag_chain.run(input=user_query, chat_history=all_chat_history)
-        # Adding a delay for a typing effect
-        time.sleep(1)
-        message_placeholder = st.chat_message("assistant")
-        full_response = result['answer']
-        message_placeholder.markdown(full_response)
+    with st.chat_message("assistant"):
+        with st.status("Generating 💡...", expanded=True):
+            # Invoke the chain to fetch the result, now including all chat history from all sessions
+            result = coversational_rag_chain.invoke({
+                "input": user_query,
+                "chat_history": all_chat_history  # Using chat history from all sessions
+            })
 
-        # Append conversation turns to the current chat
-        current_chat_messages.extend(
-            [
-                {"type": "human", "content": user_query},
-                {"type": "assistant", "content": result['answer']}
-            ]
-        )
-        save_chats()  # Save after adding a new message
+            message_placeholder = st.empty()
+
+            full_response = (
+                "⚠️ **_This information is not intended as a substitute for health advice. \n"
+                "_Please consult a healthcare professional for personalized recommendations._** \n\n\n"
+            )
+
+        # Displaying the output on the dashboard
+        for chunk in result["answer"]:
+            full_response += chunk
+            time.sleep(0.02)  # Simulate the output feeling of ChatGPT
+
+            message_placeholder.markdown(full_response + " ▌")
+
+    # Appending conversation turns to the current chat
+    current_chat_messages.extend(
+        [
+            HumanMessage(content=user_query),
+            AIMessage(content=result['answer'])
+        ]
+    )
+
+# Add Reset Current Chat button
+if st.button('Reset Current Chat 🗑️'):
+    reset_current_chat()
