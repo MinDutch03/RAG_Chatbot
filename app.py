@@ -4,14 +4,14 @@ __import__('pysqlite3')
 import sys
 sys.modules['sqlite3'] = sys.modules.pop('pysqlite3')
 
-## initializing the UI
+# Initializing the UI
 st.set_page_config(page_title="RAG-Based Health Assistant", page_icon="🚑")
 col1, col2, col3 = st.columns([1, 25, 1])
 with col2:
     st.title("RAG-Based Health Assistant 👨‍⚕️")
     st.write("Your AI-powered Assistant")
 
-## setting up env
+# Setting up env
 import os
 from numpy.core.defchararray import endswith
 
@@ -25,27 +25,27 @@ if not groq_api_key:
 if not cohere_api_key:
     st.error("CO_API_KEY not found! Please set it in the .env file.")
 
-## LangChain dependencies
+# LangChain dependencies
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
 from langchain_groq import ChatGroq
 from langchain_chroma import Chroma
 from langchain.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_cohere.chat_models import ChatCohere
-## implementation of LangChain ConversationalRetrievalChain
+# Implementation of LangChain ConversationalRetrievalChain
 from langchain.chains import create_history_aware_retriever, create_retrieval_chain
 from langchain.chains.combine_documents import create_stuff_documents_chain
 
-## setting up file paths
+# Setting up file paths
 current_dir = os.path.dirname(os.path.abspath(__file__))
 data_path = os.path.join(current_dir, "data")
 persistent_directory = os.path.join(current_dir, "data-ingestion-local")
 
-## setting up the LLM
+# Setting up the LLM
 chatmodel = ChatGroq(model="llama-3.1-8b-instant", temperature=0.15, api_key=groq_api_key)
 llm = ChatCohere(temperature=0.15, api_key=cohere_api_key)
 
-## setting up -> streamlit session state
+# Setting up -> Streamlit session state
 if "chats" not in st.session_state:
     st.session_state["chats"] = {}
 
@@ -54,18 +54,12 @@ if "current_chat" not in st.session_state:
 
 # Function to start a new chat
 def start_new_chat():
-    # Generate a unique chat ID
     new_chat_id = len(st.session_state["chats"]) + 1
-
-    # Create a new chat session
     st.session_state["chats"][new_chat_id] = {
         "messages": [],
         "id": new_chat_id
     }
-
-    # Set the current chat to the new chat
     st.session_state["current_chat"] = new_chat_id
-
     return new_chat_id
 
 # Function to reset current chat
@@ -73,36 +67,36 @@ def reset_current_chat():
     if st.session_state["current_chat"] is not None:
         st.session_state["chats"][st.session_state["current_chat"]]["messages"] = []
 
-## open-source embedding model from HuggingFace - taking the default model only
-embedF = HuggingFaceEmbeddings(model_name = "all-MiniLM-L6-v2")
+# Open-source embedding model from HuggingFace - using the default model
+embedF = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
 
-## loading the vector database from local
+# Loading the vector database from local
 vectorDB = Chroma(embedding_function=embedF, persist_directory=persistent_directory)
 
-## setting up the retriever
-kb_retriever = vectorDB.as_retriever(search_type="mmr",search_kwargs={"k": 3})
+# Setting up the retriever
+kb_retriever = vectorDB.as_retriever(search_type="mmr", search_kwargs={"k": 3})
 
-## initiating the history_aware_retriever
+# Setting up the history aware retriever
 rephrasing_template = (
     """
-        TASK: Convert context-dependent questions into standalone queries.
+    TASK: Convert context-dependent questions into standalone queries.
 
-        INPUT:
-        - chat_history: Previous messages
-        - question: Current user query
+    INPUT:
+    - chat_history: Previous messages
+    - question: Current user query
 
-        RULES:
-        1. Replace pronouns (it/they/this) with specific referents
-        2. Expand contextual phrases ("the above", "previous")
-        3. Return original if already standalone
-        4. NEVER answer or explain - only reformulate
+    RULES:
+    1. Replace pronouns (it/they/this) with specific referents
+    2. Expand contextual phrases ("the above", "previous")
+    3. Return original if already standalone
+    4. NEVER answer or explain - only reformulate
 
-        OUTPUT: Single reformulated question, preserving original intent and style.
+    OUTPUT: Single reformulated question, preserving original intent and style.
 
-        Example:
-        History: "Let's discuss Python."
-        Question: "How do I use it?"
-        Returns: "How do I use Python?"
+    Example:
+    History: "Let's discuss Python."
+    Question: "How do I use it?"
+    Returns: "How do I use Python?"
     """
 )
 
@@ -115,12 +109,12 @@ rephrasing_prompt = ChatPromptTemplate.from_messages(
 )
 
 history_aware_retriever = create_history_aware_retriever(
-    llm = chatmodel,
-    retriever = kb_retriever,
-    prompt = rephrasing_prompt
+    llm=chatmodel,
+    retriever=kb_retriever,
+    prompt=rephrasing_prompt
 )
 
-## setting-up the document chain
+# Setting up the document chain
 system_prompt_template = (
     "As a Health Assistant Chatbot specializing in health queries, "
     "your primary objective is to provide accurate and concise information based on user queries. "
@@ -145,7 +139,7 @@ qa_prompt = ChatPromptTemplate.from_messages(
 )
 
 qa_chain = create_stuff_documents_chain(chatmodel, qa_prompt)
-## final RAG chain
+# Final RAG chain
 coversational_rag_chain = create_retrieval_chain(history_aware_retriever, qa_chain)
 
 # Sidebar for chat management
@@ -164,11 +158,6 @@ if chat_options:
         format_func=lambda x: f"Chat {x}"
     )
     st.session_state["current_chat"] = selected_chat
-    current_chat_messages = st.session_state["chats"][selected_chat]["messages"]
-else:
-    # No chats available, start a new chat
-    st.session_state["current_chat"] = start_new_chat()
-    current_chat_messages = []
 
 # Check if a chat is selected
 if st.session_state["current_chat"] is None:
@@ -177,7 +166,12 @@ if st.session_state["current_chat"] is None:
 # Get current chat messages
 current_chat_messages = st.session_state["chats"][st.session_state["current_chat"]]["messages"]
 
-## printing all messages in the current chat
+# Get all previous chat messages from all sessions (collecting all history)
+all_chat_history = []
+for chat_id, chat in st.session_state["chats"].items():
+    all_chat_history.extend(chat["messages"])
+
+# Print all messages in the current chat
 for message in current_chat_messages:
     with st.chat_message(message.type):
         st.write(message.content)
@@ -190,10 +184,10 @@ if user_query:
 
     with st.chat_message("assistant"):
         with st.status("Generating 💡...", expanded=True):
-            ## invoking the chain to fetch the result
+            # Invoke the chain to fetch the result, now including all chat history from all sessions
             result = coversational_rag_chain.invoke({
                 "input": user_query,
-                "chat_history": current_chat_messages
+                "chat_history": all_chat_history  # Using chat history from all sessions
             })
 
             message_placeholder = st.empty()
@@ -203,14 +197,14 @@ if user_query:
                 "_Please consult a healthcare professional for personalized recommendations._** \n\n\n"
             )
 
-        ## displaying the output on the dashboard
+        # Displaying the output on the dashboard
         for chunk in result["answer"]:
             full_response += chunk
-            time.sleep(0.02) ## <- simulate the output feeling of ChatGPT
+            time.sleep(0.02)  # Simulate the output feeling of ChatGPT
 
             message_placeholder.markdown(full_response + " ▌")
 
-    ## appending conversation turns to the current chat
+    # Appending conversation turns to the current chat
     current_chat_messages.extend(
         [
             HumanMessage(content=user_query),
