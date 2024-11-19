@@ -1,21 +1,8 @@
 import time
 import streamlit as st
-import json
-import os
 __import__('pysqlite3')
 import sys
 sys.modules['sqlite3'] = sys.modules.pop('pysqlite3')
-
-# Function to save chat sessions to a file
-def save_chat_sessions():
-    with open("chat_sessions.json", "w") as f:
-        json.dump(st.session_state["chats"], f)
-
-# Function to load chat sessions from a file
-def load_chat_sessions():
-    if os.path.exists("chat_sessions.json"):
-        with open("chat_sessions.json", "r") as f:
-            st.session_state["chats"] = json.load(f)
 
 # Initializing the UI
 st.set_page_config(page_title="RAG-Based Health Assistant", page_icon="🚑")
@@ -24,13 +11,9 @@ with col2:
     st.title("RAG-Based Health Assistant 👨‍⚕️")
     st.write("Your AI-powered Assistant")
 
-# Loading chat sessions from file if available
-if "chats" not in st.session_state:
-    st.session_state["chats"] = {}
-    load_chat_sessions()  # Load previous chat sessions
-
-if "current_chat" not in st.session_state:
-    st.session_state["current_chat"] = None
+# Setting up env
+import os
+from numpy.core.defchararray import endswith
 
 # Get the API keys
 groq_api_key = st.secrets["GROQ_API_KEY"]
@@ -49,6 +32,7 @@ from langchain_groq import ChatGroq
 from langchain_chroma import Chroma
 from langchain.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_cohere.chat_models import ChatCohere
+# Implementation of LangChain ConversationalRetrievalChain
 from langchain.chains import create_history_aware_retriever, create_retrieval_chain
 from langchain.chains.combine_documents import create_stuff_documents_chain
 
@@ -76,15 +60,12 @@ def start_new_chat():
         "id": new_chat_id
     }
     st.session_state["current_chat"] = new_chat_id
-    save_chat_sessions()  # Save the updated sessions
     return new_chat_id
 
 # Function to reset current chat
 def reset_current_chat():
     if st.session_state["current_chat"] is not None:
         st.session_state["chats"][st.session_state["current_chat"]]["messages"] = []
-    save_chat_sessions()  # Save after resetting
-    return "Current chat has been reset."
 
 # Function to delete a chat session
 def delete_chat_session(chat_id):
@@ -99,7 +80,6 @@ def delete_chat_session(chat_id):
             st.session_state["current_chat"] = list(st.session_state["chats"].keys())[0]
         else:
             st.session_state["current_chat"] = None
-        save_chat_sessions()  # Save after deletion
 
 # Open-source embedding model from HuggingFace - using the default model
 embedF = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
@@ -235,16 +215,25 @@ if user_query:
             message_placeholder = st.empty()
 
             full_response = (
-                "⚠️ **_This information is not intended as a substitute for professional medical advice._** "
-                f"{result['output']}"
+                "⚠️ **_This information is not intended as a substitute for health advice. \n"
+                "_Please consult a healthcare professional for personalized recommendations._** \n\n\n"
             )
 
-            message_placeholder.markdown(full_response)
-            # Save the current message in the session's history
-            current_chat_messages.append({
-                "type": "assistant",
-                "content": full_response
-            })
+        # Displaying the output on the dashboard
+        for chunk in result["answer"]:
+            full_response += chunk
+            time.sleep(0.02)  # Simulate the output feeling of ChatGPT
 
-    save_chat_sessions()  # Save after generating a response
+            message_placeholder.markdown(full_response + " ▌")
 
+    # Appending conversation turns to the current chat
+    current_chat_messages.extend(
+        [
+            HumanMessage(content=user_query),
+            AIMessage(content=result['answer'])
+        ]
+    )
+
+# Add Reset Current Chat button
+if st.button('Reset Current Chat 🗑️'):
+    reset_current_chat()
