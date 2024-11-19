@@ -1,10 +1,7 @@
 import time
 import streamlit as st
-import os
-import json
-import sys
 __import__('pysqlite3')
-
+import sys
 sys.modules['sqlite3'] = sys.modules.pop('pysqlite3')
 
 # Initializing the UI
@@ -15,6 +12,10 @@ with col2:
     st.write("Your AI-powered Assistant")
 
 # Setting up env
+import os
+from numpy.core.defchararray import endswith
+
+# Get the API keys
 groq_api_key = st.secrets["GROQ_API_KEY"]
 cohere_api_key = st.secrets["CO_API_KEY"]
 
@@ -40,50 +41,6 @@ current_dir = os.path.dirname(os.path.abspath(__file__))
 data_path = os.path.join(current_dir, "data")
 persistent_directory = os.path.join(current_dir, "data-ingestion-local")
 
-# File path for saving chat sessions
-CHATS_FILE = "chats.json"
-
-# Function to load chat sessions from the file
-def load_chats():
-    if os.path.exists(CHATS_FILE):
-        try:
-            with open(CHATS_FILE, "r") as file:
-                data = json.load(file)
-                # Convert the messages back to HumanMessage and AIMessage objects
-                for chat in data.values():
-                    chat["messages"] = [
-                        HumanMessage(content=msg["content"]) if msg["type"] == "user"
-                        else AIMessage(content=msg["content"]) for msg in chat["messages"]
-                    ]
-                return data
-        except json.JSONDecodeError:
-            return {}  # Return an empty dictionary if the file is invalid or empty
-    return {}
-
-# Function to save chat sessions to the file
-def save_chats():
-    # Convert the messages to dictionaries for JSON serialization
-    chat_data = {}
-    for chat_id, chat in st.session_state["chats"].items():
-        chat_data[chat_id] = {
-            "messages": [
-                {"type": "user", "content": msg.content} if isinstance(msg, HumanMessage)
-                else {"type": "assistant", "content": msg.content} for msg in chat["messages"]
-            ],
-            "id": chat_id
-        }
-
-    with open(CHATS_FILE, "w") as file:
-        json.dump(chat_data, file)
-
-# Load chats on app startup
-if "chats" not in st.session_state:
-    st.session_state["chats"] = load_chats()
-
-# Ensure chat history is persisted across app restarts
-if "current_chat" not in st.session_state:
-    st.session_state["current_chat"] = None
-
 # Setting up the LLM
 chatmodel = ChatGroq(model="llama-3.1-8b-instant", temperature=0.15, api_key=groq_api_key)
 llm = ChatCohere(temperature=0.15, api_key=cohere_api_key)
@@ -103,23 +60,21 @@ def start_new_chat():
         "id": new_chat_id
     }
     st.session_state["current_chat"] = new_chat_id
-    save_chats()  # Save after modifying
     return new_chat_id
 
 # Function to reset current chat
 def reset_current_chat():
     if st.session_state["current_chat"] is not None:
         st.session_state["chats"][st.session_state["current_chat"]]["messages"] = []
-        save_chats()  # Save after modifying
 
 # Function to delete a chat session
 def delete_chat_session(chat_id):
     if chat_id in st.session_state["chats"]:
         del st.session_state["chats"][chat_id]
+        # Reset current chat to None if the deleted session is the current one
         if st.session_state["current_chat"] == chat_id:
             st.session_state["current_chat"] = None
         st.success(f"Chat session {chat_id} deleted successfully.")
-        save_chats()  # Save after modifying
         # Refresh the selected chat dropdown by resetting the current chat
         if len(st.session_state["chats"]) > 0:
             st.session_state["current_chat"] = list(st.session_state["chats"].keys())[0]
@@ -219,47 +174,66 @@ if chat_options:
     st.session_state["current_chat"] = selected_chat
 
     # Add Delete button
-    if st.sidebar.button(f"Delete Chat {selected_chat} ❌"):
+    if st.sidebar.button("Delete Selected Chat 🗑️"):
         delete_chat_session(selected_chat)
 
-# Current chat view
-if st.session_state["current_chat"]:
-    chat_id = st.session_state["current_chat"]
-    current_chat = st.session_state["chats"][chat_id]
-    message_placeholder = st.empty()
+# If no chats exist, create a new chat
+if not chat_options:
+    start_new_chat()
 
-    for message in current_chat["messages"]:
-        if isinstance(message, HumanMessage):
-            message_placeholder.markdown(f"**You**: {message.content}")
-        elif isinstance(message, AIMessage):
-            message_placeholder.markdown(f"**AI**: {message.content}")
+# Check if a chat is selected
+if st.session_state["current_chat"] is None:
+    start_new_chat()
 
-    # User query input
-    user_query = st.text_area("Your Question", "", placeholder="Ask something...")
+# Get current chat messages
+current_chat_messages = st.session_state["chats"][st.session_state["current_chat"]]["messages"]
 
-    # Responding to user's query
-    if st.button("Submit"):
-        # Process user query and get answer from the model
-        result = coversational_rag_chain.run(input=user_query)
+# Get all previous chat messages from all sessions (collecting all history)
+all_chat_history = []
+for chat_id, chat in st.session_state["chats"].items():
+    all_chat_history.extend(chat["messages"])
 
-        full_response = (
-            "⚠️ **_This information is not intended as a substitute for health advice. \n"
-            "_Please consult a healthcare professional for personalized recommendations._** \n\n\n"
-        )
+# Print all messages in the current chat
+for message in current_chat_messages:
+    with st.chat_message(message.type):
+        st.write(message.content)
+
+user_query = st.chat_input("Ask me anything ..")
+
+if user_query:
+    with st.chat_message("user"):
+        st.write(user_query)
+
+    with st.chat_message("assistant"):
+        with st.status("Generating 💡...", expanded=True):
+            # Invoke the chain to fetch the result, now including all chat history from all sessions
+            result = coversational_rag_chain.invoke({
+                "input": user_query,
+                "chat_history": all_chat_history  # Using chat history from all sessions
+            })
+
+            message_placeholder = st.empty()
+
+            full_response = (
+                "⚠️ **_This information is not intended as a substitute for health advice. \n"
+                "_Please consult a healthcare professional for personalized recommendations._** \n\n\n"
+            )
 
         # Displaying the output on the dashboard
         for chunk in result["answer"]:
             full_response += chunk
             time.sleep(0.02)  # Simulate the output feeling of ChatGPT
+
             message_placeholder.markdown(full_response + " ▌")
 
-        # Appending conversation turns to the current chat
-        current_chat["messages"].extend(
-            [
-                {"type": "user", "content": user_query},
-                {"type": "assistant", "content": result["answer"]}
-            ]
-        )
+    # Appending conversation turns to the current chat
+    current_chat_messages.extend(
+        [
+            HumanMessage(content=user_query),
+            AIMessage(content=result['answer'])
+        ]
+    )
 
-        # Save chat sessions after updating
-        save_chats()  # Save after modifying
+# Add Reset Current Chat button
+if st.button('Reset Current Chat 🗑️'):
+    reset_current_chat()
