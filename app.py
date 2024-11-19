@@ -67,6 +67,14 @@ def reset_current_chat():
     if st.session_state["current_chat"] is not None:
         st.session_state["chats"][st.session_state["current_chat"]]["messages"] = []
 
+# Function to delete a chat session
+def delete_chat_session(chat_id):
+    if chat_id in st.session_state["chats"]:
+        del st.session_state["chats"][chat_id]
+        if st.session_state["current_chat"] == chat_id:
+            st.session_state["current_chat"] = None
+        st.success(f"Chat session {chat_id} deleted successfully.")
+
 # Open-source embedding model from HuggingFace - using the default model
 embedF = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
 
@@ -158,6 +166,10 @@ if chat_options:
         format_func=lambda x: f"Chat {x}"
     )
     st.session_state["current_chat"] = selected_chat
+
+    # Add Delete button
+    if st.sidebar.button("Delete Selected Chat 🗑️"):
+        delete_chat_session(selected_chat)
 
 # Check if a chat is selected
 if st.session_state["current_chat"] is None:
