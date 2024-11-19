@@ -41,37 +41,9 @@ current_dir = os.path.dirname(os.path.abspath(__file__))
 data_path = os.path.join(current_dir, "data")
 persistent_directory = os.path.join(current_dir, "data-ingestion-local")
 
-## setting up the LLM
-chatmodel = ChatGroq(model="llama-3.1-8b-instant", temperature=0.15, api_key=groq_api_key)
-llm = ChatCohere(temperature=0.15, api_key=cohere_api_key)
-
-## setting up -> streamlit session state
-if "chats" not in st.session_state:
-    st.session_state["chats"] = {}
-
-if "current_chat" not in st.session_state:
-    st.session_state["current_chat"] = None
-
-# Function to start a new chat
-def start_new_chat():
-    # Generate a unique chat ID
-    new_chat_id = len(st.session_state["chats"]) + 1
-
-    # Create a new chat session
-    st.session_state["chats"][new_chat_id] = {
-        "messages": [],
-        "id": new_chat_id
-    }
-
-    # Set the current chat to the new chat
-    st.session_state["current_chat"] = new_chat_id
-
-    return new_chat_id
-
-# Function to reset current chat
-def reset_current_chat():
-    if st.session_state["current_chat"] is not None:
-        st.session_state["chats"][st.session_state["current_chat"]]["messages"] = []
+## setting-up -> streamlit session state
+if "chat_history" not in st.session_state:
+    st.session_state["chat_history"] = []
 
 ## open-source embedding model from HuggingFace - taking the default model only
 embedF = HuggingFaceEmbeddings(model_name = "all-MiniLM-L6-v2")
@@ -148,32 +120,8 @@ qa_chain = create_stuff_documents_chain(chatmodel, qa_prompt)
 ## final RAG chain
 coversational_rag_chain = create_retrieval_chain(history_aware_retriever, qa_chain)
 
-# Sidebar for chat management
-st.sidebar.title("Chat Sessions")
-
-# Add New Chat button
-if st.sidebar.button("New Chat 🆕"):
-    start_new_chat()
-
-# Display and select existing chats
-chat_options = list(st.session_state["chats"].keys())
-if chat_options:
-    selected_chat = st.sidebar.selectbox(
-        "Select a Chat",
-        options=chat_options,
-        format_func=lambda x: f"Chat {x}"
-    )
-    st.session_state["current_chat"] = selected_chat
-
-# Check if a chat is selected
-if st.session_state["current_chat"] is None:
-    start_new_chat()
-
-# Get current chat messages
-current_chat_messages = st.session_state["chats"][st.session_state["current_chat"]]["messages"]
-
-## printing all messages in the current chat
-for message in current_chat_messages:
+## printing all messages in the session_state `chat_history`
+for message in st.session_state.chat_history:
     with st.chat_message(message.type):
         st.write(message.content)
 
@@ -188,7 +136,7 @@ if user_query:
             ## invoking the chain to fetch the result
             result = coversational_rag_chain.invoke({
                 "input": user_query,
-                "chat_history": current_chat_messages
+                "chat_history": st.session_state.chat_history
             })
 
             message_placeholder = st.empty()
@@ -205,14 +153,14 @@ if user_query:
 
             message_placeholder.markdown(full_response + " ▌")
 
-    ## appending conversation turns to the current chat
-    current_chat_messages.extend(
+    ## appending conversation turns to the session_state `chat_history`
+    st.session_state.chat_history.extend(
         [
             HumanMessage(content=user_query),
             AIMessage(content=result['answer'])
         ]
     )
 
-# Add Reset Current Chat button
-if st.button('Reset Current Chat 🗑️'):
-    reset_current_chat()
+# Add Reset Chat History button
+if st.button('Reset Chat History 🗑️'):
+    st.session_state.chat_history = []
