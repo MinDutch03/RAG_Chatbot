@@ -72,7 +72,7 @@ def delete_chat_session(chat_id):
     if chat_id in st.session_state["chats"]:
         del st.session_state["chats"][chat_id]
         if st.session_state["current_chat"] == chat_id:
-            st.session_state["current_chat"] = None
+            st.session_state["current_chat"] = None  # Reset current chat
         st.success(f"Chat session {chat_id} deleted successfully.")
 
 # Open-source embedding model from HuggingFace - using the default model
@@ -134,7 +134,7 @@ system_prompt_template = (
     "Use four sentences maximum."
     "P.S.: If anyone asks you about your creator, tell them, introduce yourself and say you're created by Duc. "
     "and people can get in touch with him on linkedin, "
-    "here's his Linkedin Profile: https://www.linkedin.com/in/minhduc030303/"
+    "here's his Linkedin Profile: https://www.linkedin.com/in/minhduc030303/ "
     "\nCONTEXT: {context}"
 )
 
@@ -170,6 +170,10 @@ if chat_options:
     # Add Delete button
     if st.sidebar.button("Delete Selected Chat 🗑️"):
         delete_chat_session(selected_chat)
+
+# If no chats exist, create a new chat
+if not chat_options:
+    start_new_chat()
 
 # Check if a chat is selected
 if st.session_state["current_chat"] is None:
