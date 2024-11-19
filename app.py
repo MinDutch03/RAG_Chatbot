@@ -10,11 +10,30 @@ CHATS_FILE = "chats.json"
 def load_chats():
     if os.path.exists(CHATS_FILE):
         with open(CHATS_FILE, "r") as file:
-            return json.load(file)
+            data = json.load(file)
+            # Deserialize messages (convert back to dictionaries)
+            for chat_id, chat in data.items():
+                chat["messages"] = [
+                    {
+                        "type": message["type"],
+                        "content": message["content"]
+                    }
+                    for message in chat["messages"]
+                ]
+            return data
     return {}
 
 # Function to save chat sessions to the file
 def save_chats():
+    # Serialize messages (convert to dictionaries)
+    for chat_id, chat in st.session_state["chats"].items():
+        chat["messages"] = [
+            {
+                "type": message.type,
+                "content": message.content
+            }
+            for message in chat["messages"]
+        ]
     with open(CHATS_FILE, "w") as file:
         json.dump(st.session_state["chats"], file)
 
@@ -24,9 +43,6 @@ col1, col2, col3 = st.columns([1, 25, 1])
 with col2:
     st.title("RAG-Based Health Assistant 👨‍⚕️")
     st.write("Your AI-powered Assistant")
-
-# Setting up env
-from numpy.core.defchararray import endswith
 
 # Get the API keys
 groq_api_key = st.secrets["GROQ_API_KEY"]
@@ -211,42 +227,30 @@ for chat_id, chat in st.session_state["chats"].items():
 
 # Print all messages in the current chat
 for message in current_chat_messages:
-    with st.chat_message(message.type):
-        st.write(message.content)
+    with st.chat_message(message["type"]):
+        st.write(message["content"])
 
 user_query = st.chat_input("Ask me anything ..")
 
 if user_query:
+    # Show typing animation
     with st.chat_message("user"):
         st.write(user_query)
 
-    with st.chat_message("assistant"):
-        with st.status("Generating 💡...", expanded=True):
-            # Invoke the chain to fetch the result, now including all chat history from all sessions
-            result = coversational_rag_chain.invoke({
-                "input": user_query,
-                "chat_history": all_chat_history  # Using chat history from all sessions
-            })
-
-            message_placeholder = st.empty()
-
-            full_response = (
-                "⚠️ **_This information is not intended as a substitute for health advice. \n"
-                "_Please consult a healthcare professional for personalized recommendations._** \n\n\n"
-            )
-
-        # Displaying the output on the dashboard
-        for chunk in result["answer"]:
-            full_response += chunk
-            time.sleep(0.02)  # Adding a delay for a typing effect
-
+    # Get response from the LLM
+    with st.spinner("Thinking..."):
+        result = coversational_rag_chain.run(input=user_query, chat_history=all_chat_history)
+        # Adding a delay for a typing effect
+        time.sleep(1)
+        message_placeholder = st.chat_message("assistant")
+        full_response = result['answer']
         message_placeholder.markdown(full_response)
 
         # Append conversation turns to the current chat
         current_chat_messages.extend(
             [
-                HumanMessage(content=user_query),
-                AIMessage(content=result['answer'])
+                {"type": "human", "content": user_query},
+                {"type": "assistant", "content": result['answer']}
             ]
         )
         save_chats()  # Save after adding a new message
