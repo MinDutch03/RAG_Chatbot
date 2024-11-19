@@ -3,6 +3,7 @@ import streamlit as st
 import os
 from numpy.core.defchararray import endswith
 import sys
+import json
 __import__('pysqlite3')
 
 sys.modules['sqlite3'] = sys.modules.pop('pysqlite3')
@@ -26,7 +27,6 @@ if not cohere_api_key:
 
 # LangChain dependencies
 from langchain_huggingface import HuggingFaceEmbeddings
-from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
 from langchain_groq import ChatGroq
 from langchain_chroma import Chroma
 from langchain.prompts import ChatPromptTemplate, MessagesPlaceholder
@@ -133,11 +133,12 @@ qa_prompt = ChatPromptTemplate.from_messages(
     [
         ("system", system_prompt_template),
         ("human", "{input}"),
-        ("chat_history", "{chat_history}")
+        ("chat_history", "{chat_history}")  # Pass the history correctly as a variable
     ]
 )
 
 qa_chain = create_stuff_documents_chain(chatmodel, qa_prompt)
+
 # Final RAG chain
 coversational_rag_chain = create_retrieval_chain(history_aware_retriever, qa_chain)
 
