@@ -191,6 +191,9 @@ if user_query:
             time.sleep(0.02)
             message_placeholder.markdown(full_response + " ▌")
 
+        # Reset button at the bottom
+        st.button('Reset All Conversations 🗑️', on_click=reset_conversation)
+
     ## Update the current chat session's messages
     new_messages = [
         HumanMessage(content=user_query),
@@ -202,5 +205,4 @@ if user_query:
             chat["messages"].extend(new_messages)
             break
 
-# Reset button at the bottom
-st.button('Reset All Conversations 🗑️', on_click=reset_conversation)
+
