@@ -1,7 +1,10 @@
 import time
 import streamlit as st
-__import__('pysqlite3')
+import os
+from numpy.core.defchararray import endswith
 import sys
+__import__('pysqlite3')
+
 sys.modules['sqlite3'] = sys.modules.pop('pysqlite3')
 
 # Initializing the UI
@@ -12,10 +15,6 @@ with col2:
     st.write("Your AI-powered Assistant")
 
 # Setting up env
-import os
-from numpy.core.defchararray import endswith
-
-# Get the API keys
 groq_api_key = st.secrets["GROQ_API_KEY"]
 cohere_api_key = st.secrets["CO_API_KEY"]
 
@@ -32,7 +31,6 @@ from langchain_groq import ChatGroq
 from langchain_chroma import Chroma
 from langchain.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_cohere.chat_models import ChatCohere
-# Implementation of LangChain ConversationalRetrievalChain
 from langchain.chains import create_history_aware_retriever, create_retrieval_chain
 from langchain.chains.combine_documents import create_stuff_documents_chain
 
@@ -71,17 +69,15 @@ def reset_current_chat():
 def delete_chat_session(chat_id):
     if chat_id in st.session_state["chats"]:
         del st.session_state["chats"][chat_id]
-        # Reset current chat to None if the deleted session is the current one
         if st.session_state["current_chat"] == chat_id:
             st.session_state["current_chat"] = None
         st.success(f"Chat session {chat_id} deleted successfully.")
-        # Refresh the selected chat dropdown by resetting the current chat
         if len(st.session_state["chats"]) > 0:
             st.session_state["current_chat"] = list(st.session_state["chats"].keys())[0]
         else:
             st.session_state["current_chat"] = None
 
-# Open-source embedding model from HuggingFace - using the default model
+# Open-source embedding model from HuggingFace
 embedF = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
 
 # Loading the vector database from local
@@ -106,11 +102,6 @@ rephrasing_template = (
     4. NEVER answer or explain - only reformulate
 
     OUTPUT: Single reformulated question, preserving original intent and style.
-
-    Example:
-    History: "Let's discuss Python."
-    Question: "How do I use it?"
-    Returns: "How do I use Python?"
     """
 )
 
@@ -136,12 +127,6 @@ system_prompt_template = (
     "context from the knowledge base while avoiding unnecessary details. "
     "Your responses will be brief, to the point, concise and in compliance with the established format. "
     "If a question falls outside the given context, you will simply output that you are sorry and you don't know about this. Please contact our doctors."
-    "The aim is to deliver professional, precise, and contextually relevant information pertaining to the context. "
-    "Use four sentences maximum."
-    "P.S.: If anyone asks you about your creator, tell them, introduce yourself and say you're created by Duc. "
-    "and people can get in touch with him on linkedin, "
-    "here's his Linkedin Profile: https://www.linkedin.com/in/minhduc030303/ "
-    "\nCONTEXT: {context}"
 )
 
 qa_prompt = ChatPromptTemplate.from_messages(
@@ -195,8 +180,8 @@ for chat_id, chat in st.session_state["chats"].items():
 
 # Print all messages in the current chat
 for message in current_chat_messages:
-    with st.chat_message(message.type):
-        st.write(message.content)
+    with st.chat_message(message["type"]):
+        st.write(message["content"])
 
 user_query = st.chat_input("Ask me anything ..")
 
@@ -206,7 +191,7 @@ if user_query:
 
     with st.chat_message("assistant"):
         with st.status("Generating 💡...", expanded=True):
-            # Invoke the chain to fetch the result, now including all chat history from all sessions
+            # Invoke the chain to fetch the result
             result = coversational_rag_chain.invoke({
                 "input": user_query,
                 "chat_history": all_chat_history  # Using chat history from all sessions
@@ -219,21 +204,32 @@ if user_query:
                 "_Please consult a healthcare professional for personalized recommendations._** \n\n\n"
             )
 
-        # Displaying the output on the dashboard
-        for chunk in result["answer"]:
-            full_response += chunk
-            time.sleep(0.02)  # Simulate the output feeling of ChatGPT
+            # Displaying the output on the dashboard
+            for chunk in result["answer"]:
+                full_response += chunk
+                time.sleep(0.02)  # Simulate the output feeling of ChatGPT
 
-            message_placeholder.markdown(full_response + " ▌")
+                message_placeholder.markdown(full_response + " ▌")
 
     # Appending conversation turns to the current chat
     current_chat_messages.extend(
         [
-            HumanMessage(content=user_query),
-            AIMessage(content=result['answer'])
+            {"type": "user", "content": user_query},
+            {"type": "assistant", "content": result['answer']}
         ]
     )
 
 # Add Reset Current Chat button
 if st.button('Reset Current Chat 🗑️'):
     reset_current_chat()
+
+# Save chat sessions to a file (for persistence across refreshes)
+def save_chats():
+    with open("chats.json", "w") as f:
+        json.dump(st.session_state["chats"], f)
+
+# Load chat sessions from file
+def load_chats():
+    if os.path.exists("chats.json"):
+        with open("chats.json", "r") as f:
+            st.session_state["chats"] = json.load(f)
