@@ -3,6 +3,8 @@ import streamlit as st
 __import__('pysqlite3')
 import sys
 sys.modules['sqlite3'] = sys.modules.pop('pysqlite3')
+import json
+import os
 
 ## initializing the UI
 st.set_page_config(page_title="RAG-Based Health Assistant", page_icon="🚑")
@@ -12,7 +14,6 @@ with col2:
     st.write("Your AI-powered Assistant")
 
 ## setting up env
-import os
 from numpy.core.defchararray import endswith
 
 # Get the API keys
@@ -40,6 +41,10 @@ from langchain.chains.combine_documents import create_stuff_documents_chain
 current_dir = os.path.dirname(os.path.abspath(__file__))
 data_path = os.path.join(current_dir, "data")
 persistent_directory = os.path.join(current_dir, "data-ingestion-local")
+chats_directory = os.path.join(current_dir, "chat_history")
+
+# Create chat history directory if it doesn't exist
+os.makedirs(chats_directory, exist_ok=True)
 
 ## setting up the LLM
 chatmodel = ChatGroq(model="llama-3.1-8b-instant", temperature=0.15, api_key=groq_api_key)
@@ -52,10 +57,46 @@ if "chats" not in st.session_state:
 if "current_chat" not in st.session_state:
     st.session_state["current_chat"] = None
 
+# Function to save chat history
+def save_chat_history(chat_id, messages):
+    """Save chat history to a JSON file"""
+    filename = os.path.join(chats_directory, f"chat_{chat_id}.json")
+    with open(filename, 'w') as f:
+        # Convert messages to a serializable format
+        serializable_messages = [
+            {"type": msg.type, "content": msg.content}
+            for msg in messages
+        ]
+        json.dump(serializable_messages, f)
+
+# Function to load chat history
+def load_chat_history(chat_id):
+    """Load chat history from a JSON file"""
+    filename = os.path.join(chats_directory, f"chat_{chat_id}.json")
+    if os.path.exists(filename):
+        with open(filename, 'r') as f:
+            message_data = json.load(f)
+            # Reconstruct message objects
+            messages = []
+            for msg in message_data:
+                if msg['type'] == 'human':
+                    messages.append(HumanMessage(content=msg['content']))
+                elif msg['type'] == 'ai':
+                    messages.append(AIMessage(content=msg['content']))
+            return messages
+    return []
+
+# Function to list existing chat files
+def list_existing_chats():
+    """List all existing chat files"""
+    chat_files = [f for f in os.listdir(chats_directory) if f.startswith('chat_') and f.endswith('.json')]
+    return [int(f.split('_')[1].split('.')[0]) for f in chat_files]
+
 # Function to start a new chat
 def start_new_chat():
-    # Generate a unique chat ID
-    new_chat_id = len(st.session_state["chats"]) + 1
+    # Find the next available chat ID
+    existing_chats = list_existing_chats()
+    new_chat_id = max(existing_chats + [0]) + 1
 
     # Create a new chat session
     st.session_state["chats"][new_chat_id] = {
@@ -71,7 +112,16 @@ def start_new_chat():
 # Function to reset current chat
 def reset_current_chat():
     if st.session_state["current_chat"] is not None:
+        # Clear messages in session state
         st.session_state["chats"][st.session_state["current_chat"]]["messages"] = []
+
+        # Remove the chat history file
+        chat_id = st.session_state["current_chat"]
+        chat_file = os.path.join(chats_directory, f"chat_{chat_id}.json")
+        if os.path.exists(chat_file):
+            os.remove(chat_file)
+
+## rest of the code remains the same as in the original script...
 
 ## open-source embedding model from HuggingFace - taking the default model only
 embedF = HuggingFaceEmbeddings(model_name = "all-MiniLM-L6-v2")
@@ -156,14 +206,20 @@ if st.sidebar.button("New Chat 🆕"):
     start_new_chat()
 
 # Display and select existing chats
-chat_options = list(st.session_state["chats"].keys())
+chat_options = list_existing_chats()
 if chat_options:
     selected_chat = st.sidebar.selectbox(
         "Select a Chat",
         options=chat_options,
         format_func=lambda x: f"Chat {x}"
     )
+
+    # Load the selected chat's messages
     st.session_state["current_chat"] = selected_chat
+    st.session_state["chats"][selected_chat] = {
+        "messages": load_chat_history(selected_chat),
+        "id": selected_chat
+    }
 
 # Check if a chat is selected
 if st.session_state["current_chat"] is None:
@@ -212,6 +268,9 @@ if user_query:
             AIMessage(content=result['answer'])
         ]
     )
+
+    # Save the updated chat history
+    save_chat_history(st.session_state["current_chat"], current_chat_messages)
 
 # Add Reset Current Chat button
 if st.button('Reset Current Chat 🗑️'):
