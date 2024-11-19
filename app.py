@@ -80,7 +80,7 @@ coversational_rag_chain = create_retrieval_chain(history_aware_retriever, qa_cha
 
 # Initialize session state for multiple chat sessions
 if "chat_sessions" not in st.session_state:
-    st.session_state["chat_sessions"] = []  # Stores histories of all chat sessions
+    st.session_state["chat_sessions"] = []  # Initialize as a list to store chat histories
 if "current_session" not in st.session_state:
     st.session_state["current_session"] = []  # Tracks the current chat session
 
