@@ -3,7 +3,6 @@ import time
 import streamlit as st
 __import__('pysqlite3')
 import sys
-import uuid
 sys.modules['sqlite3'] = sys.modules.pop('pysqlite3')
 
 ## initializing the UI
@@ -15,7 +14,9 @@ with col2:
 
 ## setting up env
 import os
+# from dotenv import load_dotenv (for local)
 from numpy.core.defchararray import endswith
+# load_dotenv() # for local
 
 # Get the API keys
 groq_api_key = st.secrets["GROQ_API_KEY"]
@@ -34,6 +35,7 @@ from langchain_groq import ChatGroq
 from langchain_chroma import Chroma
 from langchain.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_cohere.chat_models import ChatCohere
+## implementation of LangChain ConversationalRetrievalChain
 from langchain.chains import create_history_aware_retriever, create_retrieval_chain
 from langchain.chains.combine_documents import create_stuff_documents_chain
 
@@ -46,30 +48,16 @@ persistent_directory = os.path.join(current_dir, "data-ingestion-local")
 chatmodel = ChatGroq(model="llama-3.1-8b-instant", temperature=0.15, api_key=groq_api_key)
 llm = ChatCohere(temperature=0.15, api_key=cohere_api_key)
 
+
 ## setting up -> streamlit session state
-if "chat_sessions" not in st.session_state:
-    st.session_state["chat_sessions"] = {}
-if "current_chat_id" not in st.session_state:
-    st.session_state["current_chat_id"] = str(uuid.uuid4())
 if "messages" not in st.session_state:
     st.session_state["messages"] = []
 
-# Function to create a new chat
-def new_chat():
-    new_chat_id = str(uuid.uuid4())
-    # Save current messages to chat_sessions
-    st.session_state["chat_sessions"][st.session_state["current_chat_id"]] = st.session_state["messages"].copy()
-    # Create new chat
-    st.session_state["current_chat_id"] = new_chat_id
-    st.session_state["messages"] = []
-
-# Function to reset the entire conversation
+# resetting the entire conversation
 def reset_conversation():
     st.session_state['messages'] = []
-    st.session_state['chat_sessions'] = {}
-    st.session_state["current_chat_id"] = str(uuid.uuid4())
 
-## open-source embedding model from HuggingFace
+## open-source embedding model from HuggingFace - taking the default model only
 embedF = HuggingFaceEmbeddings(model_name = "all-MiniLM-L6-v2")
 
 ## loading the vector database from local
@@ -79,26 +67,28 @@ vectorDB = Chroma(embedding_function=embedF, persist_directory=persistent_direct
 kb_retriever = vectorDB.as_retriever(search_type="mmr",search_kwargs={"k": 3})
 
 ## initiating the history_aware_retriever
-rephrasing_template = """
-    TASK: Convert context-dependent questions into standalone queries.
+rephrasing_template = (
+    """
+        TASK: Convert context-dependent questions into standalone queries.
 
-    INPUT:
-    - chat_history: Previous messages
-    - question: Current user query
+        INPUT:
+        - chat_history: Previous messages
+        - question: Current user query
 
-    RULES:
-    1. Replace pronouns (it/they/this) with specific referents
-    2. Expand contextual phrases ("the above", "previous")
-    3. Return original if already standalone
-    4. NEVER answer or explain - only reformulate
+        RULES:
+        1. Replace pronouns (it/they/this) with specific referents
+        2. Expand contextual phrases ("the above", "previous")
+        3. Return original if already standalone
+        4. NEVER answer or explain - only reformulate
 
-    OUTPUT: Single reformulated question, preserving original intent and style.
+        OUTPUT: Single reformulated question, preserving original intent and style.
 
-    Example:
-    History: "Let's discuss Python."
-    Question: "How do I use it?"
-    Returns: "How do I use Python?"
-"""
+        Example:
+        History: "Let's discuss Python."
+        Question: "How do I use it?"
+        Returns: "How do I use Python?"
+    """
+)
 
 rephrasing_prompt = ChatPromptTemplate.from_messages(
     [
@@ -113,6 +103,7 @@ history_aware_retriever = create_history_aware_retriever(
     retriever = kb_retriever,
     prompt = rephrasing_prompt
 )
+
 
 ## setting-up the document chain
 system_prompt_template = (
@@ -142,12 +133,7 @@ qa_chain = create_stuff_documents_chain(chatmodel, qa_prompt)
 ## final RAG chain
 coversational_rag_chain = create_retrieval_chain(history_aware_retriever, qa_chain)
 
-## Add buttons in a horizontal layout
-col1, col2 = st.columns(2)
-with col1:
-    st.button('New Chat 📝', on_click=new_chat)
-with col2:
-    st.button('Reset All Chats 🗑️', on_click=reset_conversation)
+## setting-up conversational UI
 
 ## printing all (if any) messages in the session_session `message` key
 for message in st.session_state.messages:
@@ -175,7 +161,7 @@ if user_query:
         ## displaying the output on the dashboard
         for chunk in result["answer"]:
             full_response += chunk
-            time.sleep(0.02)
+            time.sleep(0.02) ## <- simulate the output feeling of ChatGPT
 
             message_placeholder.markdown(full_response + " ▌")
     ## appending conversation turns
@@ -185,3 +171,4 @@ if user_query:
             AIMessage(content=result['answer'])
         ]
     )
+st.button('Reset Conversation 🗑️', on_click=reset_conversation)
