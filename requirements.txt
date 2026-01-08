@@ -144,7 +144,7 @@ pox==0.3.5
 ppft==1.7.6.9
 prompt_toolkit==3.0.48
 propcache==0.2.0
-protobuf==4.25.5
+protobuf==4.25.8
 psutil==6.0.0
 pure_eval==0.2.3
 pyarrow==17.0.0
